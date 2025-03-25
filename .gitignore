@@ -1,4 +1,3 @@
 src/ai-thread-labeler/venv/
 *.pyc
 __pycache__/
-db_backup.sqlc
