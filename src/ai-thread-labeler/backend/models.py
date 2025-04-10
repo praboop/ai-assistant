@@ -16,8 +16,8 @@ class Classifications(Base):
 
 class Embeddings(Base):
     __tablename__ = 'embeddings'
-    message_id = Column(UUID(as_uuid=True), ForeignKey('messages.id', ondelete="CASCADE"), primary_key=True)
-    vector = Column(Vector(768), nullable=False)  # Corrected for pgvector
+    message_id = Column(String, ForeignKey('messages.message_id', ondelete="CASCADE"), primary_key=True)
+    vector = Column(Vector(768), nullable=False)
 
 class Messages(Base):
     __tablename__ = 'messages'
