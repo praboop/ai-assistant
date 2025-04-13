@@ -1,35 +1,19 @@
 .message-container {
     margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
   }
   
-  .message-container .form-group {
-    margin-bottom: 10px;
+  .message-container p {
+    margin: 5px 0;
   }
   
-  .message-container .btn-save {
-    margin-top: 20px;
-    display: none;
+  .list-group-item {
+    cursor: pointer;
   }
   
-  .highlight {
-    background-color: #f0ad4e;
-    font-weight: bold;
-  }
-  
-  .error-message {
-    color: red;
-    font-size: 0.875rem;
-  }
-  
-  /* Flexbox for label and confidence input */
-  .message-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .message-controls .form-select,
-  .message-controls .form-control {
-    margin-right: 10px;
+  .list-group-item:hover {
+    background-color: #f0f0f0;
   }
   

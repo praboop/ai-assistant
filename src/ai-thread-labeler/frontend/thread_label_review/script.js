@@ -1,168 +1,113 @@
 let threads = [];
 let currentThreadId = null;
-let changesMade = false;
 
-async function fetchThreads() {
+// Fetch thread labels from the backend
+async function fetchThreadLabels() {
   try {
-    const response = await fetch('/api/threads'); // Replace with your backend endpoint
+    const response = await fetch('http://localhost:8000/api/thread_labels');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
     const data = await response.json();
     threads = data;
-    loadThreads();
+    populateThreadList();
   } catch (error) {
-    console.error('Error fetching threads:', error);
+    console.error('Error fetching thread labels:', error);
   }
 }
 
-function loadThreads() {
+// Populate the thread list in the left panel
+function populateThreadList() {
   const threadList = document.getElementById('threadList');
   threadList.innerHTML = '';
-  threads.forEach(thread => {
-    const li = document.createElement('li');
-    li.classList.add('list-group-item');
-    li.textContent = thread.id;
-    li.onclick = () => loadThreadDetails(thread.id);
-    li.id = `thread-${thread.id}`;
-    threadList.appendChild(li);
-  });
-}
 
-function addHighlight() {
-  document.querySelectorAll('.list-group-item').forEach(thread => thread.classList.remove('highlight'));
-  const selectedThread = document.getElementById(`thread-${currentThreadId}`);
-  if (selectedThread) selectedThread.classList.add('highlight');
-}
-
-function loadThreadDetails(threadId) {
-  currentThreadId = threadId;
-  addHighlight();
-
-  const thread = threads.find(t => t.id === threadId);
-  const threadMessagesContainer = document.getElementById('threadMessages');
-  threadMessagesContainer.innerHTML = '';
-
-  thread.messages.forEach(msg => {
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message-container');
-    messageDiv.dataset.messageId = msg.message_id;
-
-    const messageText = document.createElement('p');
-    messageText.textContent = msg.text;
-    messageDiv.appendChild(messageText);
-
-    const labelSelect = createDropdown('label', ['question', 'answer', 'clarification'], msg.label);
-    labelSelect.addEventListener('change', markAsEdited);
-
-    const confidenceInput = createInput('confidence', msg.confidence);
-    confidenceInput.addEventListener('input', markAsEdited);
-
-    const messageControls = document.createElement('div');
-    messageControls.classList.add('message-controls');
-    messageControls.appendChild(labelSelect);
-    messageControls.appendChild(confidenceInput);
-
-    const errorMessage = document.createElement('div');
-    errorMessage.classList.add('error-message');
-    errorMessage.style.display = 'none';
-
-    messageDiv.appendChild(messageControls);
-    messageDiv.appendChild(errorMessage);
-
-    threadMessagesContainer.appendChild(messageDiv);
-  });
-
-  document.getElementById('saveButton').style.display = 'block';
-  document.getElementById('saveButton').disabled = true;
-}
-
-function createDropdown(name, options, selected) {
-  const select = document.createElement('select');
-  select.classList.add('form-select');
-  select.name = name;
-  options.forEach(option => {
-    const opt = document.createElement('option');
-    opt.value = option;
-    opt.textContent = option;
-    if (option === selected) opt.selected = true;
-    select.appendChild(opt);
-  });
-  return select;
-}
-
-function createInput(name, value) {
-  const input = document.createElement('input');
-  input.classList.add('form-control');
-  input.type = 'number';
-  input.name = name;
-  input.value = value;
-  input.step = '0.01';
-  input.min = '0';
-  input.max = '1';
-  return input;
-}
-
-function markAsEdited() {
-  changesMade = true;
-  document.getElementById('saveButton').disabled = !changesMade;
-  validateInputs();
-}
-
-function validateInputs() {
-  let allValid = true;
-  const messageDivs = document.getElementById('threadMessages').getElementsByClassName('message-container');
-
-  for (const messageDiv of messageDivs) {
-    const confidenceInput = messageDiv.querySelector('input[name="confidence"]');
-    const errorMessage = messageDiv.querySelector('.error-message');
-
-    const confidenceValue = parseFloat(confidenceInput.value);
-    if (isNaN(confidenceValue) || confidenceValue < 0 || confidenceValue > 1) {
-      errorMessage.textContent = 'Confidence must be between 0 and 1.';
-      errorMessage.style.display = 'block';
-      allValid = false;
-    } else {
-      errorMessage.style.display = 'none';
+  // Group messages by parent_message_id
+  const groupedThreads = threads.reduce((acc, message) => {
+    const parentId = message.parent_message_id || 'No Parent ID';
+    if (!acc[parentId]) {
+      acc[parentId] = [];
     }
+    acc[parentId].push(message);
+    return acc;
+  }, {});
+
+  for (const parentId in groupedThreads) {
+    const listItem = document.createElement('li');
+    listItem.className = 'list-group-item';
+    listItem.textContent = `Parent ID: ${parentId}`;
+    listItem.addEventListener('click', () => {
+      currentThreadId = parentId;
+      displayThreadMessages(groupedThreads[parentId]);
+    });
+    threadList.appendChild(listItem);
   }
-
-  document.getElementById('saveButton').disabled = !allValid || !changesMade;
 }
 
-function saveThreadChanges() {
-  const thread = threads.find(t => t.id === currentThreadId);
-  console.log('Saving thread changes...');
-  console.log(thread);
-  // TODO: Add actual save logic via fetch POST or PUT
-  changesMade = false;
-  document.getElementById('saveButton').disabled = true;
+// Display messages of the selected thread in the right panel
+function displayThreadMessages(messages) {
+  const threadMessages = document.getElementById('threadMessages');
+  threadMessages.innerHTML = '';
+
+  messages.forEach((message) => {
+    const messageContainer = document.createElement('div');
+    messageContainer.className = 'message-container';
+
+    const messageContent = document.createElement('p');
+    messageContent.textContent = `Message ID: ${message.message_id}`;
+    messageContainer.appendChild(messageContent);
+
+    const label = document.createElement('p');
+    label.textContent = `Label: ${message.label}`;
+    messageContainer.appendChild(label);
+
+    const confidence = document.createElement('p');
+    confidence.textContent = `Confidence Score: ${message.confidence_score}`;
+    messageContainer.appendChild(confidence);
+
+    const solution = document.createElement('p');
+    solution.textContent = `Solution Message ID: ${message.solution_message_id}`;
+    messageContainer.appendChild(solution);
+
+    threadMessages.appendChild(messageContainer);
+  });
 }
 
-document.getElementById('searchInput').addEventListener('input', function () {
-  const searchValue = this.value.toLowerCase();
-  const filteredThreads = threads.filter(thread =>
-    thread.messages.some(msg =>
-      msg.message_id.toLowerCase().includes(searchValue) || msg.text.toLowerCase().includes(searchValue)
-    )
+// Search functionality
+document.getElementById('searchInput').addEventListener('input', (event) => {
+  const searchTerm = event.target.value.toLowerCase();
+  const filteredThreads = threads.filter((message) =>
+    message.message_id.toLowerCase().includes(searchTerm) ||
+    (message.label && message.label.toLowerCase().includes(searchTerm))
   );
-  updateThreadList(filteredThreads);
-  if (filteredThreads.length > 0) {
-    currentThreadId = filteredThreads[0].id;
-    addHighlight();
-    loadThreadDetails(currentThreadId);
-  }
+  populateFilteredThreadList(filteredThreads);
 });
 
-function updateThreadList(filteredThreads) {
+// Populate filtered thread list based on search
+function populateFilteredThreadList(filteredMessages) {
   const threadList = document.getElementById('threadList');
   threadList.innerHTML = '';
-  filteredThreads.forEach(thread => {
-    const li = document.createElement('li');
-    li.classList.add('list-group-item');
-    li.textContent = thread.id;
-    li.onclick = () => loadThreadDetails(thread.id);
-    li.id = `thread-${thread.id}`;
-    threadList.appendChild(li);
-  });
+
+  // Group messages by parent_message_id
+  const groupedThreads = filteredMessages.reduce((acc, message) => {
+    const parentId = message.parent_message_id || 'No Parent ID';
+    if (!acc[parentId]) {
+      acc[parentId] = [];
+    }
+    acc[parentId].push(message);
+    return acc;
+  }, {});
+
+  for (const parentId in groupedThreads) {
+    const listItem = document.createElement('li');
+    listItem.className = 'list-group-item';
+    listItem.textContent = `Parent ID: ${parentId}`;
+    listItem.addEventListener('click', () => {
+      currentThreadId = parentId;
+      displayThreadMessages(groupedThreads[parentId]);
+    });
+    threadList.appendChild(listItem);
+  }
 }
 
-// Load initial thread data on page load
-fetchThreads();
+// Initialize the application
+fetchThreadLabels();
