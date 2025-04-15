@@ -6,5 +6,6 @@ class ThreadLabelBase(BaseModel):
     label: str
     confidence_score: Optional[float] = None
     solution_message_id: Optional[str] = None
+    reviewed: bool = False
 
     model_config = ConfigDict(from_attributes=True)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, ForeignKey, TIMESTAMP
+from sqlalchemy import Column, String, Text, Boolean, ForeignKey, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -49,6 +49,7 @@ class ThreadLabels(Base):
     label = Column(String(20), nullable=False)
     confidence_score = Column(Float, nullable=True)
     solution_message_id = Column(String, ForeignKey('messages.message_id'), nullable=True)
+    reviewed = Column(Boolean, default=False) 
     message = relationship("Messages", back_populates="thread_labels", foreign_keys=[message_id])
 
     def __repr__(self):

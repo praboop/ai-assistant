@@ -107,9 +107,10 @@ def insert_labels(label_data, thread_ids, prompt_body=None, gemini_response_text
     thread_to_answers = {}
 
     for entry in label_data:
+
         message_id = entry["message_id"]
         label = entry["label"]
-        confidence = entry.get("confidence", 0.95)
+        confidence = entry.get("confidence_score", 0.95)
 
         # Confirm this ID exists in messages table
         exists_in_db = session.query(
