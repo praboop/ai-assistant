@@ -53,4 +53,4 @@ class ThreadLabels(Base):
     message = relationship("Messages", back_populates="thread_labels", foreign_keys=[message_id])
 
     def __repr__(self):
-        return f"<ThreadLabels(message_id={self.message_id}, label={self.label}, confidence_score={self.confidence_score})>"
+        return f"<ThreadLabels(message_id={self.message_id}, label={self.label}, confidence_score={self.confidence_score}, reviewed={self.reviewed})>"

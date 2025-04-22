@@ -8,6 +8,7 @@ from backend.db import SessionLocal, engine
 from fastapi.responses import HTMLResponse
 from fastapi import Request
 import os
+import json
 from . import models
 
 # Create all tables
@@ -52,7 +53,8 @@ def get_threads(db: Session = Depends(get_db)):
         if thread_id not in threads:
             threads[thread_id] = {
                 "id": thread_id,
-                "messages": []
+                "messages": [],
+                "created": None  # We'll fill this in later with parent message timestamp
             }
 
         label = labels.get(msg.message_id)
@@ -61,9 +63,18 @@ def get_threads(db: Session = Depends(get_db)):
             "text": msg.text,
             "label": label.label if label else None,
             "confidence": label.confidence_score if label else None,
+            "reviewed": label.reviewed if label else None,
+            "created": msg.created.isoformat()  # optional: include per-message timestamp too
         })
 
-    return list(threads.values())        
+    # Fill in thread-level created timestamp using the parent message's created date
+    for thread in threads.values():
+        parent_msg = next((m for m in messages if m.message_id == thread["id"]), None)
+        if parent_msg:
+            thread["created"] = parent_msg.created.isoformat()
+
+    return list(threads.values())
+    
 
 @app.get("/api/thread_labels", response_model=List[schemas.ThreadLabelBase])
 def read_thread_labels(
@@ -78,5 +89,59 @@ def read_thread_labels(
         return labels
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/thread_labels/update")
+def update_thread_labels(data: schemas.ThreadLabelsUpdate, db: Session = Depends(get_db)):
+    # Get all message_ids in the thread (parent + children)
+    thread_msg_ids = db.query(models.Messages.message_id).filter(
+        (models.Messages.parent_id == data.thread_parent_id) | (models.Messages.message_id == data.thread_parent_id)
+    ).all()
+    # Flatten result tuples into a set
+    thread_msg_ids = {row[0] for row in thread_msg_ids}
+    if not thread_msg_ids:
+        raise HTTPException(status_code=404, detail="Thread messages not found for the given parent_message_id")
+
+    # Iterate over each update item and validate that the updated message belongs to the thread.
+    for update in data.updates:
+        if update.message_id not in thread_msg_ids:
+            raise HTTPException(status_code=400, detail=f"Message ID {update.message_id} is not part of the thread {data.thread_parent_id}")
+
+        # Retrieve the existing label record (if any)
+        label_record = db.query(models.ThreadLabels).filter(models.ThreadLabels.message_id == update.message_id).first()
+        if label_record:
+            label_record.label = update.label
+            label_record.confidence_score = update.confidence_score
+            label_record.reviewed = update.reviewed
+        else:
+            new_record = models.ThreadLabels(
+                message_id=update.message_id,
+                label=update.label,
+                confidence_score=update.confidence_score,
+                reviewed=update.reviewed
+            )
+            db.add(new_record)
+
+    db.commit()
+
+    # Determine solution_message_id for the thread:
+    # Among all records for messages in the thread with label "answer", pick the one with the highest confidence.
+    answer_records = db.query(models.ThreadLabels).filter(
+        models.ThreadLabels.message_id.in_(thread_msg_ids),
+        models.ThreadLabels.label == "answer"
+    ).all()
+
+    if answer_records:
+        best_answer = max(answer_records, key=lambda r: r.confidence_score)
+        db.query(models.ThreadLabels).filter(
+            models.ThreadLabels.message_id.in_(thread_msg_ids)
+        ).update({models.ThreadLabels.solution_message_id: best_answer.message_id}, synchronize_session=False)
+    else:
+        db.query(models.ThreadLabels).filter(
+            models.ThreadLabels.message_id.in_(thread_msg_ids)
+        ).update({models.ThreadLabels.solution_message_id: None}, synchronize_session=False)
+
+    db.commit()
+
+    return {"success": True, "updated": len(data.updates)}  
 
 app.include_router(router)

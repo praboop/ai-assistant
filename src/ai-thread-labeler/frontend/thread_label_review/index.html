@@ -3,260 +3,433 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Thread Labeling</title>
+  <title>Thread Labeling - Review</title>
+  <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    .message-container { margin-bottom: 15px; }
-    .message-container .form-group { margin-bottom: 10px; }
-    .message-container .btn-save { margin-top: 20px; display: none; }
-    .highlight { background-color: #f0ad4e; font-weight: bold; }
-    .error-message { color: red; font-size: 0.875rem; }
-    .message-controls {
+    /* Left panel container */
+    .left-panel {
+      width: 300px;
+      max-height: 100vh;
+      overflow-y: auto;
+      border-right: 1px solid #ccc;
+      padding: 10px;
+    }
+
+    /* Each thread item styling */
+    .thread-item {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .message-controls .form-select,
-    .message-controls .form-control {
-      margin-right: 10px;
-    }
-    #threadList li {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
+      flex-direction: column;
+      padding: 10px;
+      margin-bottom: 10px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
       cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .thread-item:hover {
+      background-color: #eaeaea;
+    }
+    .thread-item.highlight {
+      background-color: #f0ad4e;
+      font-weight: bold;
+    }
+    /* Header row for each thread item: date, parent text, and status badge */
+    .thread-item-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-bottom: 5px;
+    }
+    .thread-date {
+      font-size: 0.8em;
+      color: #888;
+      white-space: nowrap;
+      margin-right: 5px;
+    }
+    .thread-status {
+      font-size: 0.9em;
+      font-weight: bold;
     }
     .badge-reviewed {
-      color: green;
-      font-weight: bold;
+      background-color: green;
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 3px;
     }
     .badge-partial {
-      color: orange;
-      font-weight: bold;
+      background-color: orange;
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .badge-unreviewed {
+      background-color: red;
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    /* Parent text should be truncated to 3 lines */
+    .thread-parent-text {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 0.9em;
+    }
+
+    /* Right panel styling */
+    .right-panel {
+      padding: 10px;
+    }
+    .message-container {
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    .message-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 5px;
+    }
+    .error-message {
+      color: red;
+      font-size: 0.85rem;
+      margin-top: 5px;
     }
   </style>
 </head>
 <body>
 
-    <div class="container mt-5">
-        <div class="row">
-          <div class="col-md-3">
-            <h5>Thread List</h5>
-            <input type="text" id="searchInput" class="form-control" placeholder="Search by message ID or text">
-            <select id="filterSelect" class="form-select mt-2">
-              <option value="all">All</option>
-              <option value="reviewed">Reviewed</option>
-              <option value="unreviewed">Unreviewed</option>
-              <option value="partial">Partial</option>
-            </select>
-            <ul id="threadList" class="list-group mt-3"></ul>
-          </div>
-          <div class="col-md-9">
-            <h5>Thread Details</h5>
-            <div id="threadMessages" class="thread-messages"></div>
-            <button id="saveButton" class="btn btn-primary btn-save" onclick="saveThreadChanges()" disabled>Save Changes</button>
-          </div>
-        </div>
-      </div>
-      
+<div class="container-fluid mt-3">
+  <div class="row">
+    <!-- Left panel: Thread List -->
+    <div class="col-md-3 left-panel">
+      <h5>Thread List</h5>
+      <input type="text" id="searchInput" class="form-control mb-3" placeholder="Search by ID or text">
+      <ul id="threadList" class="list-group"></ul>
+    </div>
+    <!-- Right panel: Thread Details -->
+    <div class="col-md-9 right-panel">
+      <h5>Thread Details</h5>
+      <div id="threadHeader"></div>
+      <div id="threadMessages" class="mt-3"></div>
+      <button id="saveButton" class="btn btn-primary mt-3" onclick="saveThreadChanges()">Save Changes</button>
+    </div>
+  </div>
+</div>
 
+<!-- Bootstrap 5 JS and dependencies -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-    let threads = [];
-    let currentThreadId = null;
-    let changesMade = false;
-    let filteredThreads = [];
-  
-    async function fetchThreads() {
-      try {
-        const response = await fetch('http://localhost:8000/api/threads');
-        if (!response.ok) {
-          console.error("Failed to fetch threads:", response.status, response.statusText);
-          return;
-        }
-        threads = await response.json();
-        filteredThreads = threads;
-        loadThreads();
-  
-        if (threads.length > 0) {
-          currentThreadId = threads[0].id;
-          loadThreadDetails(currentThreadId);
-        }
-  
-      } catch (error) {
-        console.error("Error fetching thread data:", error);
+  let threads = [];
+  let currentThreadId = null;
+  let changesMade = false; // Tracks if any changes have been made
+
+  // Helper to format ISO date to "1-JAN-24 HH:MM AM/PM"
+  function formatDate(isoDateStr) {
+    const d = new Date(isoDateStr);
+    const options = { day: 'numeric', month: 'short', year: '2-digit', hour: 'numeric', minute: 'numeric' };
+    return d.toLocaleString('en-US', options);
+  }
+
+  // Fetch threads from the backend
+  async function fetchThreads() {
+    try {
+      const response = await fetch('http://localhost:8000/api/threads');
+      if (!response.ok) {
+        console.error("Failed to fetch threads:", response.status, response.statusText);
+        return;
       }
-    }
-  
-    function getReviewStatus(messages) {
-      const reviewed = messages.every(msg => msg.reviewed);
-      if (reviewed) return 'reviewed';
-      const unreviewed = messages.every(msg => !msg.reviewed);
-      if (unreviewed) return 'unreviewed';
-      return 'partial';
-    }
-  
-    function getBadge(status) {
-      if (status === 'reviewed') return '<span class="badge-reviewed">✅</span>';
-      if (status === 'partial') return '<span class="badge-partial">🟡</span>';
-      return '';
-    }
-  
-    function loadThreads() {
-      const threadList = document.getElementById('threadList');
-      threadList.innerHTML = '';
-      filteredThreads.forEach(thread => {
-        const li = document.createElement('li');
-        li.classList.add('list-group-item');
-        li.id = `thread-${thread.id}`;
-        li.title = thread.id;
-  
-        const status = getReviewStatus(thread.messages);
-        li.innerHTML = `<span style="flex-grow:1; overflow:hidden; text-overflow:ellipsis;">${thread.id}</span> ${getBadge(status)}`;
-        li.onclick = () => loadThreadDetails(thread.id);
-        if (thread.id === currentThreadId) li.classList.add('highlight');
-        threadList.appendChild(li);
-      });
-    }
-  
-    function loadThreadDetails(threadId) {
-      currentThreadId = threadId;
-      addHighlight();
-      const thread = threads.find(t => t.id === threadId);
-      const container = document.getElementById('threadMessages');
-      container.innerHTML = '';
-  
-      thread.messages.forEach(msg => {
-        const msgDiv = document.createElement('div');
-        msgDiv.classList.add('message-container');
-        msgDiv.dataset.messageId = msg.message_id;
-  
-        const p = document.createElement('p');
-        p.textContent = msg.text;
-        msgDiv.appendChild(p);
-  
-        const labelSelect = createDropdown('label', ['question', 'answer', 'clarification'], msg.label);
-        labelSelect.addEventListener('change', markAsEdited);
-  
-        const confidenceInput = createInput('confidence', msg.confidence);
-        confidenceInput.addEventListener('input', markAsEdited);
-  
-        const controls = document.createElement('div');
-        controls.classList.add('message-controls');
-        controls.appendChild(labelSelect);
-        controls.appendChild(confidenceInput);
-  
-        const errorDiv = document.createElement('div');
-        errorDiv.classList.add('error-message');
-        errorDiv.style.display = 'none';
-  
-        msgDiv.appendChild(controls);
-        msgDiv.appendChild(errorDiv);
-        container.appendChild(msgDiv);
-      });
-  
-      document.getElementById('saveButton').style.display = 'block';
-      document.getElementById('saveButton').disabled = true;
-    }
-  
-    function createDropdown(name, options, selected) {
-      const select = document.createElement('select');
-      select.classList.add('form-select');
-      select.name = name;
-      options.forEach(opt => {
-        const o = document.createElement('option');
-        o.value = opt;
-        o.textContent = opt;
-        if (opt === selected) o.selected = true;
-        select.appendChild(o);
-      });
-      return select;
-    }
-  
-    function createInput(name, value) {
-      const input = document.createElement('input');
-      input.classList.add('form-control');
-      input.type = 'number';
-      input.name = name;
-      input.value = value;
-      input.step = '0.01';
-      input.min = '0';
-      input.max = '1';
-      return input;
-    }
-  
-    function markAsEdited() {
-      changesMade = true;
-      validateInputs();
-    }
-  
-    function validateInputs() {
-      let allValid = true;
-      const divs = document.querySelectorAll('.message-container');
-      divs.forEach(div => {
-        const input = div.querySelector('input[name="confidence"]');
-        const err = div.querySelector('.error-message');
-        const val = parseFloat(input.value);
-        if (isNaN(val) || val < 0 || val > 1) {
-          err.textContent = 'Confidence must be between 0 and 1.';
-          err.style.display = 'block';
-          allValid = false;
-        } else {
-          err.style.display = 'none';
+      threads = await response.json();
+      // Post-process threads to add created date and parent text, if not present
+      threads.forEach(thread => {
+        if (!thread.created && thread.messages.length > 0) {
+          // Use the parent's created date (assuming first message is the question)
+          thread.created = thread.messages[0].created || "2025-01-01T12:00:00Z";
+        }
+        if (!thread.parentText && thread.messages.length > 0) {
+          // Find the first message with label "question" or fallback to the first message
+          const questionMsg = thread.messages.find(m => m.label === 'question');
+          thread.parentText = questionMsg ? questionMsg.text : thread.messages[0].text;
+        }
+        // Compute review status if not provided
+        if (!thread.review_status) {
+          const total = thread.messages.length;
+          const reviewed = thread.messages.filter(m => m.reviewed === true).length;
+          if (reviewed === total && total > 0) thread.review_status = 'reviewed';
+          else if (reviewed === 0) thread.review_status = 'unreviewed';
+          else thread.review_status = 'partial';
         }
       });
-      document.getElementById('saveButton').disabled = !allValid || !changesMade;
+      loadThreads();
+      if (threads.length > 0) {
+        currentThreadId = threads[0].id;
+        loadThreadDetails(currentThreadId);
+      }
+    } catch (error) {
+      console.error("Error fetching thread data:", error);
     }
-  
-    function addHighlight() {
-      document.querySelectorAll('.list-group-item').forEach(el => el.classList.remove('highlight'));
-      const selected = document.getElementById(`thread-${currentThreadId}`);
-      if (selected) selected.classList.add('highlight');
-    }
-  
-    function saveThreadChanges() {
-      const thread = threads.find(t => t.id === currentThreadId);
-      console.log('Saving thread:', thread);
+  }
+
+  function loadThreads() {
+    const threadList = document.getElementById('threadList');
+    threadList.innerHTML = '';
+    threads.forEach(thread => {
+      const li = document.createElement('li');
+      li.classList.add('list-group-item', 'thread-item');
+      li.id = `thread-${thread.id}`;
+
+      // Build header: date, parent text, review badge
+      const header = document.createElement('div');
+      header.classList.add('thread-item-header');
+
+      const dateEl = document.createElement('div');
+      dateEl.classList.add('thread-date');
+      dateEl.textContent = formatDate(thread.created);
+
+      const statusEl = document.createElement('div');
+      statusEl.classList.add('thread-status');
+      if (thread.review_status === 'reviewed') {
+        statusEl.classList.add('badge-reviewed');
+        statusEl.textContent = "✔️";
+      } else if (thread.review_status === 'partial') {
+        statusEl.classList.add('badge-partial');
+        statusEl.textContent = "Partial";
+      } else {
+        statusEl.classList.add('badge-unreviewed');
+        statusEl.textContent = "New";
+      }
+
+      header.appendChild(dateEl);
+      header.appendChild(statusEl);
+
+      const parentText = document.createElement('div');
+      parentText.classList.add('thread-parent-text');
+      parentText.textContent = thread.parentText;
+
+      li.appendChild(header);
+      li.appendChild(parentText);
+      li.onclick = () => loadThreadDetails(thread.id);
+
+      threadList.appendChild(li);
+    });
+  }
+
+  function addHighlight() {
+    document.querySelectorAll('.thread-item').forEach(el => el.classList.remove('highlight'));
+    const selected = document.getElementById(`thread-${currentThreadId}`);
+    if (selected) selected.classList.add('highlight');
+  }
+
+  function loadThreadDetails(threadId) {
+    currentThreadId = threadId;
+    addHighlight();
+    const thread = threads.find(t => t.id === threadId);
+    // Sort messages by created timestamp if available
+    thread.messages.sort((a, b) => new Date(a.created) - new Date(b.created));
+
+    const container = document.getElementById('threadMessages');
+    container.innerHTML = '';
+
+    // Display thread header reference (parent thread id for reference)
+    const headerDiv = document.createElement('div');
+    headerDiv.classList.add('mb-3');
+    headerDiv.innerHTML = `<strong>Thread ID:</strong> ${thread.id}`;
+    container.appendChild(headerDiv);
+
+    thread.messages.forEach(msg => {
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('message-container');
+      msgDiv.dataset.messageId = msg.message_id;
+
+      const p = document.createElement('p');
+      p.textContent = msg.text;
+      msgDiv.appendChild(p);
+
+      const labelSelect = createDropdown('label', ['question', 'answer', 'clarification'], msg.label);
+      labelSelect.addEventListener('change', markAsEdited);
+
+      const confidenceInput = createInput('confidence', msg.confidence);
+      confidenceInput.addEventListener('input', markAsEdited);
+
+      const controls = document.createElement('div');
+      controls.classList.add('message-controls');
+      controls.appendChild(labelSelect);
+      controls.appendChild(confidenceInput);
+
+      const errorDiv = document.createElement('div');
+      errorDiv.classList.add('error-message');
+      errorDiv.style.display = 'none';
+
+      msgDiv.appendChild(controls);
+      msgDiv.appendChild(errorDiv);
+      container.appendChild(msgDiv);
+    });
+
+    // Show Save button always (so the reviewer can click save even if no changes were made)
+    document.getElementById('saveButton').style.display = 'block';
+    document.getElementById('saveButton').disabled = false;
+  }
+
+  function createDropdown(name, options, selected) {
+    const select = document.createElement('select');
+    select.classList.add('form-select');
+    select.name = name;
+    options.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt;
+      o.textContent = opt;
+      if (opt === selected) o.selected = true;
+      select.appendChild(o);
+    });
+    return select;
+  }
+
+  function createInput(name, value) {
+    const input = document.createElement('input');
+    input.classList.add('form-control');
+    input.type = 'number';
+    input.name = name;
+    input.value = value;
+    input.step = '0.01';
+    input.min = '0';
+    input.max = '1';
+    return input;
+  }
+
+  function markAsEdited() {
+    changesMade = true;
+    // Enable save button whenever a change is made
+    document.getElementById('saveButton').disabled = false;
+    validateInputs();
+  }
+
+  function validateInputs() {
+    let allValid = true;
+    const divs = document.querySelectorAll('.message-container');
+    divs.forEach(div => {
+      const input = div.querySelector('input[name="confidence"]');
+      const err = div.querySelector('.error-message');
+      const val = parseFloat(input.value);
+      if (isNaN(val) || val < 0 || val > 1) {
+        err.textContent = 'Confidence must be between 0 and 1.';
+        err.style.display = 'block';
+        allValid = false;
+      } else {
+        err.style.display = 'none';
+      }
+    });
+    document.getElementById('saveButton').disabled = !allValid || !changesMade;
+  }
+
+  async function saveThreadChanges() {
+    const thread = threads.find(t => t.id === currentThreadId);
+    // Collect all updated label information from the DOM
+    const container = document.getElementById('threadMessages');
+    const msgDivs = container.querySelectorAll('.message-container');
+    const updates = [];
+    msgDivs.forEach(div => {
+      const messageId = div.dataset.messageId;
+      const label = div.querySelector('select[name="label"]').value;
+      const confidence = parseFloat(div.querySelector('input[name="confidence"]').value);
+      updates.push({ message_id: messageId, label: label, confidence_score: confidence, reviewed: true });
+    });
+
+    // Prepare the payload. We assume the backend endpoint expects:
+    // { "thread_parent_id": "<parent_message_id>", "updates": [ ... ] }
+    const payload = {
+      thread_parent_id: currentThreadId,
+      updates: updates
+    };
+    console.log("Saving payload:", payload);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/thread_labels/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        console.error("Failed to update labels:", response.status, response.statusText);
+        return;
+      }
+      alert("Thread labels updated successfully!");
       changesMade = false;
       document.getElementById('saveButton').disabled = true;
+      // Refresh threads from backend
+      await fetchThreads();
+    } catch (error) {
+      console.error("Error updating thread labels:", error);
     }
-  
-    document.getElementById('searchInput').addEventListener('input', function () {
-      const searchVal = this.value.toLowerCase();
-      filteredThreads = threads.filter(t => t.messages.some(
-        m => m.message_id.toLowerCase().includes(searchVal) || m.text.toLowerCase().includes(searchVal)
-      ));
-      loadThreads();
-      if (filteredThreads.length > 0) {
-        currentThreadId = filteredThreads[0].id;
-        loadThreadDetails(currentThreadId);
-      } else {
-        document.getElementById('threadMessages').innerHTML = '';
-      }
-    });
-  
-    document.getElementById('filterSelect').addEventListener('change', function () {
-      const selected = this.value;
-      filteredThreads = threads.filter(t => {
-        const status = getReviewStatus(t.messages);
-        return selected === 'all' || selected === status;
-      });
-      loadThreads();
-      if (filteredThreads.length > 0) {
-        currentThreadId = filteredThreads[0].id;
-        loadThreadDetails(currentThreadId);
-      } else {
-        document.getElementById('threadMessages').innerHTML = '';
-      }
-    });
-  
-    fetchThreads();
-  </script>
+  }
 
+  // Search functionality
+  document.getElementById('searchInput').addEventListener('input', function () {
+    const searchVal = this.value.toLowerCase();
+    const filtered = threads.filter(t =>
+      t.messages.some(m =>
+        m.message_id.toLowerCase().includes(searchVal) ||
+        m.text.toLowerCase().includes(searchVal)
+      )
+    );
+    updateThreadList(filtered);
+    if (filtered.length > 0) {
+      currentThreadId = filtered[0].id;
+      loadThreadDetails(currentThreadId);
+    } else {
+      document.getElementById('threadMessages').innerHTML = '';
+    }
+  });
+
+  function updateThreadList(filtered) {
+    const list = document.getElementById('threadList');
+    list.innerHTML = '';
+    filtered.forEach(thread => {
+      const li = document.createElement('li');
+      li.classList.add('list-group-item', 'thread-item');
+      li.id = `thread-${thread.id}`;
+
+      const header = document.createElement('div');
+      header.classList.add('thread-item-header');
+
+      const dateEl = document.createElement('div');
+      dateEl.classList.add('thread-date');
+      dateEl.textContent = formatDate(thread.created);
+
+      const statusEl = document.createElement('div');
+      statusEl.classList.add('thread-status');
+      if (thread.review_status === 'reviewed') {
+        statusEl.classList.add('badge-reviewed');
+        statusEl.textContent = "✔️";
+      } else if (thread.review_status === 'partial') {
+        statusEl.classList.add('badge-partial');
+        statusEl.textContent = "Partial";
+      } else {
+        statusEl.classList.add('badge-unreviewed');
+        statusEl.textContent = "New";
+      }
+      header.appendChild(dateEl);
+      header.appendChild(statusEl);
+
+      const parentText = document.createElement('div');
+      parentText.classList.add('thread-parent-text');
+      parentText.textContent = thread.parentText;
+
+      li.appendChild(header);
+      li.appendChild(parentText);
+      li.onclick = () => loadThreadDetails(thread.id);
+      if (thread.id === currentThreadId) li.classList.add('highlight');
+      list.appendChild(li);
+    });
+  }
+
+  // Fetch threads when the page loads
+  fetchThreads();
+</script>
 </body>
 </html>
