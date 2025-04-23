@@ -7,6 +7,8 @@ from backend import models, crud, schemas
 from backend.db import SessionLocal, engine
 from fastapi.responses import HTMLResponse
 from fastapi import Request
+from backend.query_service import QueryService
+from fastapi import Body
 import os
 import json
 from . import models
@@ -22,6 +24,7 @@ app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
 router = APIRouter()
 
+query_service = QueryService()
 
 # Dependency for DB session
 def get_db():
@@ -143,5 +146,15 @@ def update_thread_labels(data: schemas.ThreadLabelsUpdate, db: Session = Depends
     db.commit()
 
     return {"success": True, "updated": len(data.updates)}  
+
+
+@router.post("/api/query")
+def query_thread_similarities(payload: dict = Body(...)):
+    query_text = payload.get("query")
+    if not query_text:
+        raise HTTPException(status_code=400, detail="Missing query text")
+
+    # Just a stub — will call embedding + FAISS next
+    return {"message": "Query endpoint is live", "query": query_text}    
 
 app.include_router(router)

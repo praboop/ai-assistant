@@ -35,9 +35,9 @@ class ThreadLabelsUpdate(BaseModel):
     
     @validator('updates')
     def check_question_consistency(cls, updates, values):
-        thread_parent_id = values.get('thread_parent_id')
-        for item in updates:
-            # For a "question", the message_id must equal the thread_parent_id
-            if item.label == "question" and item.message_id != thread_parent_id:
-                raise ValueError(f"For a label 'question', message_id must match the thread_parent_id ({thread_parent_id}).")
+        # thread_parent_id = values.get('thread_parent_id')
+        # for item in updates:
+        #     # For a "question", the message_id must equal the thread_parent_id
+        #     if item.label == "question" and item.message_id != thread_parent_id:
+        #         raise ValueError(f"For a label 'question', message_id must match the thread_parent_id ({thread_parent_id}).")
         return updates
