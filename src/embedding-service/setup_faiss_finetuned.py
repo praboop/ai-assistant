@@ -15,6 +15,8 @@ if not rows:
     print("No embeddings found in the database.")
     exit(1)
 
+# Extract message_ids and vectors
+message_ids = [row[0] for row in rows]
 # Convert to NumPy array
 embeddings = np.array([np.array(eval(row[0]), dtype=np.float32) for row in rows])
 
@@ -41,7 +43,12 @@ index.add(embeddings)
 # Save index
 faiss.write_index(index, "faiss_index_finetuned.bin")
 
+with open("faiss_index_finetuned.ids", "w") as f:
+    for mid in message_ids:
+        f.write(mid + "\n")
+
 print("FAISS HNSW index created and saved as faiss_index_finetuned.bin")
+print("Message IDs saved to faiss_index_finetuned.ids")
 
 # Close DB connection
 cur.close()

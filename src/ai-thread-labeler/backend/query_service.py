@@ -5,9 +5,15 @@ from backend.db import SessionLocal
 from backend import models
 import os
 import pickle
+import sys
 
-FAISS_INDEX_PATH = "embedding-service/faiss_index_finetuned.bin"
-EMBEDDING_DIM = 768  # Change if your embedding size differs
+# Ensure embedding-service is in the path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../embedding-service')))
+
+# Define paths
+FAISS_INDEX_PATH = os.path.join("embedding-service", "faiss_index_finetuned.bin")
+FAISS_ID_MAP_PATH = os.path.splitext(FAISS_INDEX_PATH)[0] + ".ids"
+EMBEDDING_DIM = 768  # Adjust if your embeddings use a different dimension
 
 class QueryService:
     def __init__(self):
@@ -20,8 +26,9 @@ class QueryService:
             raise RuntimeError(f"FAISS index not found at {FAISS_INDEX_PATH}")
         self.index = faiss.read_index(FAISS_INDEX_PATH)
 
-        # Load ID mapping if using IndexIDMap or similar
-        with open(FAISS_INDEX_PATH + ".ids", "rb") as f:
+        if not os.path.exists(FAISS_ID_MAP_PATH):
+            raise RuntimeError(f"FAISS ID map not found at {FAISS_ID_MAP_PATH}")
+        with open(FAISS_ID_MAP_PATH, "rb") as f:
             self.id_map = pickle.load(f)
 
     def get_db(self):
