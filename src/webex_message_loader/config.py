@@ -3,12 +3,12 @@
 import datetime
 
 # Webex API details
-ACCESS_TOKEN = "ODVkNzkyODgtMjc3Ni00NjkzLWEzZTUtNTA4Y2JkYmQxODQ5NTU5YWVjYmUtMjUw_PF84_1eb65fdf-9643-417f-9974-ad72cae0e10f"
+ACCESS_TOKEN = "MTlmY2I0YWMtNTM3Yy00YmU3LWI4ZTctNTI2ZjBiNTU2OWMyOWIxYmQ1ZWUtMDgz_PF84_1eb65fdf-9643-417f-9974-ad72cae0e10f"
 MAX_RESULTS = 100  # Number of messages per request
 
 # Date range for filtering messages
-START_DATE = "01-NOV-2024"  # DD-MMM-YYYY format
-END_DATE = "22-MAR-2025"
+START_DATE = "01-JAN-2022"  # DD-MMM-YYYY format
+END_DATE = "21-JUN-2025"
 
 def format_iso8601(date_str):
     """ Convert 'DD-MMM-YYYY' format to ISO 8601 ('YYYY-MM-DDT00:00:00Z') """
@@ -35,7 +35,7 @@ HEADERS = {
 
 DB_CONFIG = {
     "host": "localhost",
-    "port": 5432,
+    "port": 5433,
     "database": "core-team-ai-assistant",
     "user": "core_user",
     "password": "BjqXmDcSWYpUf4J7UY7DKr"

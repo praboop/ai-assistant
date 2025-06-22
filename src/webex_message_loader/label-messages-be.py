@@ -16,7 +16,7 @@ DB_CONFIG = {
     "user": "core_user",
     "password": "BjqXmDcSWYpUf4J7UY7DKr",
     "host": "localhost",
-    "port": 5432
+    "port": 5433
 }
 
 def get_db_connection():

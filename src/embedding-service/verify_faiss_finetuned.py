@@ -10,7 +10,17 @@ conn = psycopg2.connect(**DB_CONFIG)
 cur = conn.cursor()
 
 # Build mapping: get the list of message IDs in the same order used for index creation.
-cur.execute("SELECT message_id FROM embeddings ORDER BY message_id")
+#cur.execute("SELECT message_id FROM embeddings ORDER BY message_id")
+
+# ✅ Match the parent filtering used during FAISS index build
+cur.execute("""
+    SELECT m.message_id
+    FROM messages m
+    JOIN embeddings e ON m.message_id = e.message_id
+    WHERE m.parent_id IS NULL
+    ORDER BY m.created
+""")
+
 all_ids = [row[0] for row in cur.fetchall()]
 print(f"Built mapping for {len(all_ids)} embeddings.")
 

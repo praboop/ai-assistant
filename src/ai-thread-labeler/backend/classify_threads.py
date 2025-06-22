@@ -21,6 +21,9 @@ engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 session = Session()
 
+# Number of threads (with childrens) to be sent to gemini at a time
+global_batch_size=5
+
 # Gemini Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
@@ -30,7 +33,7 @@ GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 
 # --- Core Functions --- #
 
-def fetch_unlabeled_threads(batch_size=5):
+def fetch_unlabeled_threads():
     parents = session.query(Messages).filter(Messages.parent_id == None).all()
     unlabeled_parents = []
     for parent in parents:
@@ -39,7 +42,7 @@ def fetch_unlabeled_threads(batch_size=5):
         ).scalar()
         if not already_labeled:
             unlabeled_parents.append(parent)
-        if len(unlabeled_parents) >= batch_size:
+        if len(unlabeled_parents) >= global_batch_size:
             break
     return unlabeled_parents
 
@@ -82,11 +85,17 @@ def call_gemini(prompt_body):
     try:
         response = requests.post(GEMINI_URL, headers=headers, json=prompt_body)
         response.raise_for_status()
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        content = response.json()["candidates"][0]["content"]["parts"]
+        if not content:
+            raise ValueError("Gemini returned empty parts")
+        global_batch_size = 5
+        return content[0]["text"]
     except Exception as e:
+        global_batch_size = 1
         print(f"❌ Gemini error: {e}")
-        if response is not None:
-            print(f"Response Body: {response.text}")
+        if 'response' in locals():
+            print("📥 Response body:")
+            print(response.text[:2000])
         return None
 
 
@@ -165,9 +174,9 @@ def print_status(batch_parents):
 
 # --- Main Execution --- #
 
-def classify_all_threads(batch_size=5):
+def classify_all_threads():
     while True:
-        parents = fetch_unlabeled_threads(batch_size)
+        parents = fetch_unlabeled_threads()
         if not parents:
             print("✅ All threads are already labeled.")
             break

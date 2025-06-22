@@ -1,6 +1,7 @@
 import requests
 import psycopg2
 import time
+import uuid
 from datetime import datetime
 from collections import defaultdict
 from config import BASE_URL, HEADERS, ROOMS, DB_CONFIG, MAX_RESULTS, START_DATE, END_DATE
@@ -112,10 +113,10 @@ def insert_messages(messages, room_id):
             created_date = created.split("T")[0]
 
             cursor.execute("""
-                INSERT INTO messages (message_id, space_id, person_id, person_email, parent_id, text, created)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO messages (id, message_id, space_id, person_id, person_email, parent_id, text, created)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (message_id) DO NOTHING;
-            """, (message_id, space_id, person_id, person_email, parent_id, text, created))
+            """, (str(uuid.uuid4()), message_id, space_id, person_id, person_email, parent_id, text, created))
 
             inserted_per_date[created_date] += 1  # Track count per date
 

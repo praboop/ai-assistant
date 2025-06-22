@@ -1,3 +1,4 @@
-src/ai-thread-labeler/venv/
+**/venv/
+.DS_Store
 *.pyc
 __pycache__/

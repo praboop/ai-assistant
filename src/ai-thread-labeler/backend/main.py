@@ -7,11 +7,10 @@ from backend import models, crud, schemas
 from backend.db import SessionLocal, engine
 from fastapi.responses import HTMLResponse
 from fastapi import Request
-from backend.query_service import QueryService
 from fastapi import Body
 import os
 import json
-from . import models
+from backend import models
 
 # Create all tables
 models.Base.metadata.create_all(bind=engine)
@@ -23,8 +22,6 @@ frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../front
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
 router = APIRouter()
-
-query_service = QueryService()
 
 # Dependency for DB session
 def get_db():
