@@ -151,6 +151,109 @@ Follow the step-by-step guide in [`webex-ai-assistant-setup.md`](webex-ai-assist
 
 ---
 
+## 📈 Improvements (Backlog / Future Work)
+
+### 1. Better Query → Thread Matching (Multi-stage Retrieval)
+
+**Problem:**  
+Current FAISS retrieval is based purely on embedding similarity. It often returns threads that share surface-level terms but miss the true user intent (e.g., documentation queries returning troubleshooting answers).
+
+**Planned Solution:**
+
+| Step | Description |
+|---|---|
+| 1 | **FAISS Coarse Retrieval:** Fetch top 10–20 candidate threads based on vector similarity. |
+| 2 | **LLM-based Re-ranking:** Use Gemini (or a lightweight local LLM) to re-rank the FAISS results by semantic relevance to the query. |
+| 3 | **Intent Classification:** Add an intent detection step for the user query (e.g., "documentation", "how-to", "issue resolution"). Use this to filter or reweight candidate threads before Gemini prompting. |
+
+---
+
+### 2. Noise Filtering in Forum Messages (Child Message Cleanup)
+
+**Problem:**  
+Child messages in threads often contain operational noise like:
+
+- Status updates:  
+  _"I have informed the team"_, _"Assigned to engineer"_, _"Notified Core Support"_
+
+- CC mentions:  
+  _"cc: John Doe"_
+
+**Planned Solution:**
+
+| Type of Noise | Action |
+|---|---|
+| Name mentions / cc lines | Regex strip lines starting with `"cc:"` or detected personal names |
+| Operational updates | Filter phrases like `"notified"`, `"assigned"`, `"ticket updated"` |
+| Low-content posts | Filter very short messages that don't contain technical keywords |
+
+---
+
+### 3. Thread Intent-aware Answer Selection
+
+**Problem:**  
+Even if the right thread is retrieved, the backend may select an irrelevant child message (e.g., first answer tagged "answer" but unrelated to query intent).
+
+**Planned Solution:**
+
+| Current Behavior | Future Behavior |
+|---|---|
+| Selects first message labeled `"answer"` | Analyze all child messages and select the one **most aligned to user query intent**, using either embeddings or a small LLM. |
+
+---
+
+### 4. Intent-aware Gemini Prompting
+
+**Current Fix:**  
+Gemini prompt already contains query classification hints (e.g., if the query looks like a documentation request but the thread lacks links, Gemini is instructed to mark it as poor/no match).
+
+**Future:**  
+Integrate explicit intent detection for each user query. Pass intent type to Gemini and tailor the prompt accordingly.
+
+---
+
+### 5. Frontend UX Improvements
+
+| Issue | Proposed Fix |
+|---|---|
+| No user feedback during backend processing | ✅ Added "Searching..." spinner. Can later replace with loading animation or progress bar. |
+| Lack of visibility into FAISS / Gemini stages | Optional: Expose top FAISS threads and Gemini’s choice as an expandable developer/debugging view in the UI. |
+
+---
+
+### 6. Continuous Ingestion and Indexing Pipeline
+
+**Problem:**  
+Currently, all messages from the space are bulk-loaded once. Any new messages posted after that are not automatically ingested or indexed.
+
+**Planned Solution:**
+
+| Area | Action |
+|---|---|
+| Message Ingestion | Set up a scheduled job or webhook-based listener to monitor the space continuously for new posts. |
+| Embedding Generation | Auto-generate embeddings for new messages on arrival. |
+| FAISS Index Update | Incrementally update FAISS index to include new messages without needing a full rebuild. |
+| Metadata Storage | Ensure new messages and their embeddings are persisted in the PostgreSQL and FAISS storage layers. |
+
+---
+
+### 7. Cloud Deployment & Hosting
+
+**Problem:**  
+The entire solution currently runs on a local development machine.
+
+**Planned Solution:**
+
+| Area | Action |
+|---|---|
+| Backend Hosting | Containerize the backend and deploy on a cloud VM or container service (e.g., AWS EC2, GCP GKE, Azure App Service). |
+| Database Hosting | Move PostgreSQL to a managed cloud database service (e.g., AWS RDS, Cloud SQL). |
+| FAISS Index Persistence | Host FAISS index files in durable cloud storage (e.g., S3, GCS) and load them at service startup. |
+| Frontend Access | Expose the FastAPI app via a secure cloud endpoint with HTTPS (e.g., via NGINX, API Gateway, or similar). |
+| CI/CD Pipeline | Optional: Set up CI/CD for auto-deployment on code changes. |
+
+---
+
 ## 👥 Contributing
 
 Contributions are welcome! Please file issues or feature requests in GitHub or reach out to the maintainers.
