@@ -12,6 +12,8 @@ import re
 BASE_DIR = os.path.dirname(__file__)
 sys.path.append(BASE_DIR)
 
+from query_service import get_thread_response
+
 # Gemini Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
@@ -19,9 +21,7 @@ if not GEMINI_API_KEY:
 
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
 
-from query_service import get_thread_response
-
-# Point templates to the ../frontend/templates directory
+# Jinja template setup
 frontend_dir = os.path.abspath(os.path.join(BASE_DIR, "../frontend/templates"))
 templates = Jinja2Templates(directory=frontend_dir)
 
@@ -33,6 +33,7 @@ def _get_gemini_instructions() -> str:
         "You are a helpful AI support assistant.\n\n"
         "You will be given:\n"
         "- A user's question\n"
+        "- The original question from a past support thread\n"
         "- A possibly related past support answer (which may contain personal names, links, or escalation suggestions)\n\n"
         "Your job is to assess how well the past answer fits the new question.\n\n"
         "There are three possible situations:\n\n"
@@ -67,12 +68,13 @@ def _get_gemini_instructions() -> str:
     )
 
 
-def _build_gemini_prompt(user_query: str, thread_answer: str, follow_ups: list[str] = []) -> dict:
+def _build_gemini_prompt(user_query: str, thread_question: str, thread_answer: str, follow_ups: list[str] = []) -> dict:
     parts = [
         {"text": "You're an AI support assistant helping users with technical issues."},
         {"text": _get_gemini_instructions()},
         {"text": "---"},
         {"text": f"📝 User's Question:\n{user_query.strip()}"},
+        {"text": f"🧵 Original Thread Question:\n{thread_question.strip()}"},
         {"text": f"📄 Possible Answer from past support:\n{thread_answer.strip()}"}
     ]
 
@@ -97,10 +99,9 @@ def _call_gemini(prompt_body):
         print("\n📥 Raw Gemini text:\n", raw_text[:1000], "\n")
         return raw_text
     except Exception as e:
-        print(f"\n❌ Gemini error: {e}")
+        print(f"\n❌ Gemini API call failed: {e}")
         if 'response' in locals():
-            print("📨 Gemini full response body:")
-            print(response.text[:2000])
+            print("📨 Gemini full response:\n", response.text[:2000])
         return None
 
 
@@ -112,7 +113,8 @@ def _is_query_too_vague(query: str) -> bool:
     tokens = re.findall(r'\w+', query.lower())
     stopwords = {"the", "is", "in", "on", "of", "to", "a", "and", "what", "how", "why", "when", "need", "some", "information"}
     keywords = [word for word in tokens if word not in stopwords]
-    return len(keywords) < 3
+    print(f"Tokens: {tokens} | Non-stopword keywords: {keywords} | Count: {len(keywords)}")
+    return len(keywords) < 2
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -123,26 +125,53 @@ async def home(request: Request):
         "result": None,
         "assistant_response": None,
         "confidence_score": None,
-        "reasoning": None
+        "reasoning": None,
+        "faiss_score": None,
+        "backend_error": None
     })
 
 
 @app.post("/", response_class=HTMLResponse)
 async def handle_query(request: Request, query: str = Form(...)):
+    backend_error = None
+
     if _is_query_too_vague(query):
+        print("Query received: " + query + " is vague.")
         return templates.TemplateResponse("index.html", {
             "request": request,
             "query": query,
             "result": None,
             "assistant_response": (
-                "Your question seems a bit unclear. Could you please provide more details so I can help better?"
+                "Your question seems a bit unclear. Could you please provide more details so I can help better."
             ),
             "confidence_score": 0.0,
-            "reasoning": "The question was too vague and did not contain enough specific keywords."
+            "reasoning": "The question was too vague and did not contain enough specific keywords.",
+            "faiss_score": 0.0,
+            "backend_error": None
         })
 
-    result = get_thread_response(query)
-    gemini_prompt = _build_gemini_prompt(query, result["answer"], result["follow_ups"])
+    # Call backend FAISS+DB
+    try:
+        result = get_thread_response(query)
+    except Exception as e:
+        print(f"\n❌ Backend error while querying FAISS/DB: {e}")
+        backend_error = f"Backend error: {e}"
+        result = None
+
+    if result is None:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "query": query,
+            "result": None,
+            "assistant_response": "Unable to retrieve support thread data. Please try again later.",
+            "confidence_score": 0.0,
+            "reasoning": "The backend system failed to provide any matching threads. Possible reasons: DB down, FAISS unavailable, or no relevant data.",
+            "faiss_score": 0.0,
+            "backend_error": backend_error or "No thread results available from backend."
+        })
+
+    # Call Gemini
+    gemini_prompt = _build_gemini_prompt(query, result["thread_question"], result["answer"], result["follow_ups"])
     raw_response = _call_gemini(gemini_prompt)
 
     assistant_response = "I'm unable to provide a suitable response right now. Please check the matched response below."
@@ -154,13 +183,20 @@ async def handle_query(request: Request, query: str = Form(...)):
             cleaned = _extract_json_from_markdown(raw_response)
             print("🔍 Cleaned Gemini JSON attempt:\n", cleaned)
             parsed = json.loads(cleaned)
-            assistant_response = parsed.get("response", assistant_response)
-            confidence_score = parsed.get("confidence_score", 0.0)
-            reasoning = parsed.get("reasoning", "")
+
+            if not all(k in parsed for k in ("response", "confidence_score", "reasoning")):
+                backend_error = "Gemini response missing required fields."
+                print("❌ Gemini response missing keys.")
+            else:
+                assistant_response = parsed["response"]
+                confidence_score = parsed["confidence_score"]
+                reasoning = parsed["reasoning"]
+
         except json.JSONDecodeError as e:
-            print("❌ Failed to parse Gemini JSON response")
-            print("🔎 Raw response snippet:\n", raw_response[:500])
-            print("⚠️ JSON decode error:", e)
+            backend_error = f"Failed to parse Gemini JSON: {e}"
+            print("❌ JSON parse error:", e)
+    else:
+        backend_error = "Gemini API failed or returned no content."
 
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -169,7 +205,8 @@ async def handle_query(request: Request, query: str = Form(...)):
         "assistant_response": assistant_response,
         "confidence_score": confidence_score,
         "reasoning": reasoning,
-        "faiss_score": result.get("faiss_score", 0.0)
+        "faiss_score": result.get("faiss_score", 0.0),
+        "backend_error": backend_error
     })
 
 

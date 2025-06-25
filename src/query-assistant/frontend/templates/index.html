@@ -13,19 +13,16 @@
             font-size: 0.85rem;
             font-weight: 500;
         }
-
         .confidence-badge {
             right: 1rem;
             background-color: #e7f1ff;
             color: #0d6efd;
         }
-
         .faiss-badge {
             right: 12rem;
             background-color: #e9fbe6;
             color: #198754;
         }
-
         .assistant-box {
             position: relative;
             padding-top: 2rem;
@@ -42,6 +39,20 @@
         </div>
         <button type="submit" class="btn btn-primary">Search</button>
     </form>
+
+    <!-- Loading Spinner -->
+    <div id="loadingIndicator" class="alert alert-info mt-3 d-none">
+        <div class="spinner-border text-primary me-2" role="status" style="width: 1.5rem; height: 1.5rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        Processing your query... Please wait.
+    </div>
+
+    {% if backend_error %}
+    <div class="alert alert-danger mt-3">
+        <strong>⚠️ Backend Error:</strong> {{ backend_error }}
+    </div>
+    {% endif %}
 
     {% if assistant_response %}
     <div class="mt-5">
@@ -65,6 +76,7 @@
             {% endif %}
         </div>
 
+        {% if result %}
         <div class="accordion mt-4" id="rawAccordion">
             <div class="accordion-item">
                 <h2 class="accordion-header" id="rawHeading">
@@ -84,12 +96,25 @@
                         </ul>
                         {% endif %}
                         <p class="text-muted">Thread ID: <code>{{ result.thread_id }}</code></p>
+                        {% if result.thread_question %}
+                        <p><strong>Thread Question:</strong> {{ result.thread_question }}</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
+        {% endif %}
+
     </div>
     {% endif %}
 </div>
+
+<!-- JS to show loading indicator -->
+<script>
+document.querySelector('form').addEventListener('submit', function() {
+    document.getElementById('loadingIndicator').classList.remove('d-none');
+});
+</script>
+
 </body>
 </html>
